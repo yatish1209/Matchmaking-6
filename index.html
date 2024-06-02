@@ -51,21 +51,21 @@
                 const data = await response.json();
                 console.log('Fetched data:', data);
 
-                // Perform interpolation
-                var interpolatedLocation = interpolateLocation(data, wlanStrength, cellularStrength);
+                // Perform matching
+                var matchedLocation = matchLocation(data, wlanStrength, cellularStrength);
 
                 // Output the collected and matched values
                 var output = document.getElementById('output');
-                output.innerHTML = `<p>Latitude: ${interpolatedLocation.latitude.toFixed(6)}</p>` +
-                                   `<p>Longitude: ${interpolatedLocation.longitude.toFixed(6)}</p>` +
+                output.innerHTML = `<p>Latitude: ${matchedLocation.latitude.toFixed(6)}</p>` +
+                                   `<p>Longitude: ${matchedLocation.longitude.toFixed(6)}</p>` +
                                    `<p>WLAN Strength: ${wlanStrength}</p>` +
                                    `<p>Cellular Strength: ${cellularStrength}</p>`;
 
                 // Update the marker position
                 var marker = document.getElementById('marker');
                 var map = document.getElementById('map');
-                var markerPositionX = interpolatedLocation.longitude * (map.width / 10);
-                var markerPositionY = map.height - (interpolatedLocation.latitude * (map.height / 10));
+                var markerPositionX = matchedLocation.longitude * (map.width / 10);
+                var markerPositionY = map.height - (matchedLocation.latitude * (map.height / 10));
                 marker.style.left = markerPositionX + 'px';
                 marker.style.top = markerPositionY + 'px';
             } catch (error) {
@@ -74,32 +74,25 @@
             }
         }
 
-        function interpolateLocation(data, wlanStrength, cellularStrength) {
-            // Use K-Nearest Neighbors (KNN) algorithm
-            var k = 3; // Number of nearest neighbors
-            var distances = data.map(point => {
+        function matchLocation(data, wlanStrength, cellularStrength) {
+            // Find the closest match based on the sum of absolute differences
+            var closestMatch = data[0];
+            var minDifference = Infinity;
+
+            data.forEach(point => {
                 var wlanDifference = Math.abs(wlanStrength - point.data.wlan_strength);
                 var cellularDifference = Math.abs(cellularStrength - point.data.cellular_strength);
-                var distance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
-                return { distance, latitude: point.data.latitude, longitude: point.data.longitude };
-            });
+                var totalDifference = wlanDifference + cellularDifference;
 
-            // Sort by distance
-            distances.sort((a, b) => a.distance - b.distance);
-
-            // Take the average of the top k nearest neighbors
-            var nearestNeighbors = distances.slice(0, k);
-            var totalLat = 0;
-            var totalLng = 0;
-
-            nearestNeighbors.forEach(neighbor => {
-                totalLat += neighbor.latitude;
-                totalLng += neighbor.longitude;
+                if (totalDifference < minDifference) {
+                    minDifference = totalDifference;
+                    closestMatch = point.data;
+                }
             });
 
             return {
-                latitude: totalLat / k,
-                longitude: totalLng / k
+                latitude: parseFloat(closestMatch.latitude),
+                longitude: parseFloat(closestMatch.longitude)
             };
         }
 
