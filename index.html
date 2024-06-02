@@ -19,6 +19,9 @@
     </div>
 
     <script>
+        // Define a constant for the number of nearest neighbors to consider
+        const k = 3;
+
         function collectAndMatchData() {
             // Collect WLAN and Cellular signal strengths
             var wlanStrength = getWLANSignalStrength();
@@ -28,37 +31,47 @@
             fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69')
                 .then(response => response.json())
                 .then(data => {
-                    var closestLatitude;
-                    var closestLongitude;
-                    var minDifference = Infinity;
+                    // Create an array to store distances and indices
+                    var distances = [];
 
                     // Iterate through each row in the table
-                    data.forEach(row => {
-                        // Calculate the difference between the collected values and the values in the table
+                    data.forEach((row, index) => {
+                        // Calculate the Euclidean distance between collected values and the values in the table
                         var wlanDifference = Math.abs(wlanStrength - row.wlan_strength);
                         var cellularDifference = Math.abs(cellularStrength - row.cellular_strength);
-                        // var totalDifference = wlanDifference + cellularDifference;
                         var euclideanDistance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
 
-                        // Update closest latitude and longitude if a closer match is found
-                        if (euclideanDistance < minDifference) {
-                            minDifference = euclideanDistance;
-                            closestLatitude = row.latitude;
-                            closestLongitude = row.longitude;
-                        }
+                        // Push the distance and index into the distances array
+                        distances.push({ index: index, distance: euclideanDistance });
                     });
+
+                    // Sort the distances array by distance in ascending order
+                    distances.sort((a, b) => a.distance - b.distance);
+
+                    // Get the k nearest neighbors
+                    var nearestNeighbors = distances.slice(0, k);
+
+                    // Calculate the average of latitude and longitude of k nearest neighbors
+                    var avgLatitude = 0;
+                    var avgLongitude = 0;
+                    nearestNeighbors.forEach(neighbor => {
+                        avgLatitude += parseFloat(data[neighbor.index].latitude);
+                        avgLongitude += parseFloat(data[neighbor.index].longitude);
+                    });
+                    avgLatitude /= k;
+                    avgLongitude /= k;
 
                     // Output the collected and matched values
                     var output = document.getElementById('output');
-                    output.innerHTML = "<p>Latitude: " + closestLatitude + "</p><p>Longitude: " + closestLongitude + "</p>" +
+                    output.innerHTML = "<p>Latitude: " + avgLatitude.toFixed(6) + "</p><p>Longitude: " + avgLongitude.toFixed(6) + "</p>" +
                                         "<p>WLAN Strength: " + wlanStrength + "</p><p>Cellular Strength: " + cellularStrength + "</p>";
 
                     // Update the marker position
                     var marker = document.getElementById('marker');
                     var map = document.getElementById('map');
-                    var markerPositionX = closestLongitude * (map.width / 10);
-                    var markerPositionY = map.height - (closestLatitude * (map.height / 10));
-                    marker.style.left = markerPositionX + 50 + 'px';
+                    var markerPositionX = avgLongitude * (map.width / 10);
+                    var markerPositionY = map.height - (avgLatitude * (map.height / 10));
+                    marker.style.left = markerPositionX + 'px';
                     marker.style.top = markerPositionY + 'px';
                 })
                 .catch(error => {
@@ -69,12 +82,12 @@
 
         // Function to simulate getting WLAN signal strength
         function getWLANSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
         }
 
         // Function to simulate getting Cellular signal strength
         function getCellularSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
         }
     </script>
 </body>
