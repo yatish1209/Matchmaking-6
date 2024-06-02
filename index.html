@@ -82,13 +82,31 @@
 
         // Function to simulate getting WLAN signal strength
         function getWLANSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
+            if (navigator.connection) {
+                // Assuming WLAN if connection type is 'wifi'
+                if (navigator.connection.type === 'wifi') {
+                    // There's no direct way to get signal strength, but downlink speed can be a proxy
+                    return navigator.connection.downlink || 'Unknown';
+                } else {
+                    return 'Not connected to WiFi';
+                }
+            } else {
+                return 'Navigator connection API not supported';
+            }
         }
 
         // Function to simulate getting Cellular signal strength
         function getCellularSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
-        }
+                // Assuming cellular if connection type is 'cellular'
+                if (navigator.connection.type === 'cellular') {
+                    // There's no direct way to get signal strength, but downlink speed can be a proxy
+                    return navigator.connection.downlink || 'Unknown';
+                } else {
+                    return 'Not connected to Cellular';
+                }
+            } else {
+                return 'Navigator connection API not supported';
+            }
     </script>
 </body>
 </html>
