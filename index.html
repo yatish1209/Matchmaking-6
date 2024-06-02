@@ -37,10 +37,10 @@
     </div>
 
     <script>
-        function collectAndMatchData() {
+        async function collectAndMatchData() {
             // Collect WLAN and Cellular signal strengths
-            var wlanStrength = getWLANSignalStrength();
-            var cellularStrength = getCellularSignalStrength();
+            var wlanStrength = await getWLANSignalStrength();
+            var cellularStrength = await getCellularSignalStrength();
 
             // Fetch the pre-stored values from the table
             fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69')
@@ -71,35 +71,60 @@
         }
 
         function interpolateLocation(data, wlanStrength, cellularStrength) {
-            var totalWeight = 0;
-            var weightedLatSum = 0;
-            var weightedLngSum = 0;
-
-            data.forEach(point => {
-                var wlanDifference = Math.abs(wlanStrength - point.wlan_strength);
-                var cellularDifference = Math.abs(cellularStrength - point.cellular_strength);
+            // Use K-Nearest Neighbors (KNN) algorithm
+            var k = 3; // Number of nearest neighbors
+            var distances = data.map(point => {
+                var wlanDifference = Math.abs(wlanStrength - point.data.wlan_strength);
+                var cellularDifference = Math.abs(cellularStrength - point.data.cellular_strength);
                 var distance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
-                var weight = 1 / (distance + 0.0001); // Avoid division by zero
+                return { distance, latitude: point.data.latitude, longitude: point.data.longitude };
+            });
 
-                totalWeight += weight;
-                weightedLatSum += point.latitude * weight;
-                weightedLngSum += point.longitude * weight;
+            // Sort by distance
+            distances.sort((a, b) => a.distance - b.distance);
+
+            // Take the average of the top k nearest neighbors
+            var nearestNeighbors = distances.slice(0, k);
+            var totalLat = 0;
+            var totalLng = 0;
+
+            nearestNeighbors.forEach(neighbor => {
+                totalLat += neighbor.latitude;
+                totalLng += neighbor.longitude;
             });
 
             return {
-                latitude: weightedLatSum / totalWeight,
-                longitude: weightedLngSum / totalWeight
+                latitude: totalLat / k,
+                longitude: totalLng / k
             };
         }
 
-        // Function to simulate getting WLAN signal strength
-        function getWLANSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
+        // Function to get WLAN signal strength using navigator.connection API
+        async function getWLANSignalStrength() {
+            if (navigator.connection) {
+                if (navigator.connection.type === 'wifi') {
+                    // There's no direct way to get signal strength, but downlink speed can be a proxy
+                    return navigator.connection.downlink || 'Unknown';
+                } else {
+                    return 'Not connected to WiFi';
+                }
+            } else {
+                return 'Navigator connection API not supported';
+            }
         }
 
-        // Function to simulate getting Cellular signal strength
-        function getCellularSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
+        // Function to get Cellular signal strength using navigator.connection API
+        async function getCellularSignalStrength() {
+            if (navigator.connection) {
+                if (navigator.connection.type === 'cellular') {
+                    // There's no direct way to get signal strength, but downlink speed can be a proxy
+                    return navigator.connection.downlink || 'Unknown';
+                } else {
+                    return 'Not connected to Cellular';
+                }
+            } else {
+                return 'Navigator connection API not supported';
+            }
         }
     </script>
 </body>
