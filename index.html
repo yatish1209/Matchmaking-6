@@ -4,23 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Get Location</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <link href="styles.css" rel="stylesheet">
     <style>
         #map-container {
             position: relative;
-            width: 500px; /* adjust as needed */
-            height: 500px; /* adjust as needed */
         }
         #map {
-            width: 100%;
-            height: 100%;
+            max-width: 100%;
+            height: auto;
         }
         #marker {
             position: absolute;
-            width: 10px;
-            height: 10px;
+            width: 20px;
+            height: 20px;
             background-color: red;
             border-radius: 50%;
+            transform: translate(-50%, -50%);
         }
     </style>
 </head>
@@ -28,7 +29,7 @@
     <div class="container">
         <h1>Get Location</h1>
         <p>Tap the button below to get the location</p>
-        <button class="get-location-btn" onclick="collectAndMatchData()">Get Location</button>
+        <button class="btn btn-primary get-location-btn" onclick="collectAndMatchData()">Get Location</button>
         <div id="output"></div>
         <div id="map-container">
             <img id="map" src="Floor Plan 1000x1000 px.jpg" alt="Map">
@@ -36,92 +37,68 @@
         </div>
     </div>
 
+    <!-- Bootstrap JS and your custom script -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js" integrity="sha384-LqYzpD5C1FgY2r3r+llCB8F4eOMa7iHR0YKtMdrzIqqWPe1j79eAU5zYd9I1B3cl" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous"></script>
+
     <script>
-        async function collectAndMatchData() {
-            try {
-                // Collect WLAN and Cellular signal strengths
-                var wlanStrength = await getWLANSignalStrength();
-                var cellularStrength = await getCellularSignalStrength();
+        function collectAndMatchData() {
+            // Collect WLAN and Cellular signal strengths
+            var wlanStrength = getWLANSignalStrength();
+            var cellularStrength = getCellularSignalStrength();
 
-                // Fetch the pre-stored values from the table
-                const response = await fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69');
-                if (!response.ok) {
-                    throw new Error('Network response was not ok ' + response.statusText);
-                }
-                const data = await response.json();
-                console.log('Fetched data:', data);
+            // Fetch the pre-stored values from the table
+            fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69')
+                .then(response => response.json())
+                .then(data => {
+                    var closestLatitude;
+                    var closestLongitude;
+                    var minDifference = Infinity;
 
-                // Perform matching
-                var matchedLocation = matchLocation(data, wlanStrength, cellularStrength);
+                    // Iterate through each row in the table
+                    data.forEach(row => {
+                        // Calculate the difference between the collected values and the values in the table
+                        var wlanDifference = Math.abs(wlanStrength - row.wlan_strength);
+                        var cellularDifference = Math.abs(cellularStrength - row.cellular_strength);
+                        // var totalDifference = wlanDifference + cellularDifference;
+                        var euclideanDistance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
 
-                // Output the collected and matched values
-                var output = document.getElementById('output');
-                output.innerHTML = `<p>Latitude: ${matchedLocation.latitude.toFixed(6)}</p>` +
-                                   `<p>Longitude: ${matchedLocation.longitude.toFixed(6)}</p>` +
-                                   `<p>WLAN Strength: ${wlanStrength}</p>` +
-                                   `<p>Cellular Strength: ${cellularStrength}</p>`;
+                        // Update closest latitude and longitude if a closer match is found
+                        if (euclideanDistance < minDifference) {
+                            minDifference = euclideanDistance;
+                            closestLatitude = row.latitude;
+                            closestLongitude = row.longitude;
+                        }
+                    });
 
-                // Update the marker position
-                var marker = document.getElementById('marker');
-                var map = document.getElementById('map');
-                var markerPositionX = matchedLocation.longitude * (map.width / 10);
-                var markerPositionY = map.height - (matchedLocation.latitude * (map.height / 10));
-                marker.style.left = markerPositionX + 'px';
-                marker.style.top = markerPositionY + 'px';
-            } catch (error) {
-                console.error('Fetch error:', error);
-                alert('An error occurred while fetching data. Please try again later.');
-            }
+                    // Output the collected and matched values
+                    var output = document.getElementById('output');
+                    output.innerHTML = "<p>Latitude: " + closestLatitude + "</p><p>Longitude: " + closestLongitude + "</p>" +
+                                        "<p>WLAN Strength: " + wlanStrength + "</p><p>Cellular Strength: " + cellularStrength + "</p>";
+
+                    // Update the marker position
+                    var marker = document.getElementById('marker');
+                    var map = document.getElementById('map');
+                    var markerPositionX = closestLongitude * (map.width / 10);
+                    var markerPositionY = map.height - (closestLatitude * (map.height / 10));
+                    marker.style.left = markerPositionX + 'px';
+                    marker.style.top = markerPositionY + 'px';
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    alert('An error occurred while fetching data. Please try again later.');
+                });
         }
 
-        function matchLocation(data, wlanStrength, cellularStrength) {
-            // Find the closest match based on the sum of absolute differences
-            var closestMatch = data[0];
-            var minDifference = Infinity;
-
-            data.forEach(point => {
-                var wlanDifference = Math.abs(wlanStrength - point.data.wlan_strength);
-                var cellularDifference = Math.abs(cellularStrength - point.data.cellular_strength);
-                var totalDifference = wlanDifference + cellularDifference;
-
-                if (totalDifference < minDifference) {
-                    minDifference = totalDifference;
-                    closestMatch = point.data;
-                }
-            });
-
-            return {
-                latitude: parseFloat(closestMatch.latitude),
-                longitude: parseFloat(closestMatch.longitude)
-            };
+        // Function to simulate getting WLAN signal strength
+        function getWLANSignalStrength() {
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
         }
 
-        // Function to get WLAN signal strength using navigator.connection API
-        async function getWLANSignalStrength() {
-            if (navigator.connection) {
-                if (navigator.connection.type === 'wifi') {
-                    // There's no direct way to get signal strength, but downlink speed can be a proxy
-                    return navigator.connection.downlink || 'Unknown';
-                } else {
-                    return 'Not connected to WiFi';
-                }
-            } else {
-                return 'Navigator connection API not supported';
-            }
-        }
-
-        // Function to get Cellular signal strength using navigator.connection API
-        async function getCellularSignalStrength() {
-            if (navigator.connection) {
-                if (navigator.connection.type === 'cellular') {
-                    // There's no direct way to get signal strength, but downlink speed can be a proxy
-                    return navigator.connection.downlink || 'Unknown';
-                } else {
-                    return 'Not connected to Cellular';
-                }
-            } else {
-                return 'Navigator connection API not supported';
-            }
+        // Function to simulate getting Cellular signal strength
+        function getCellularSignalStrength() {
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
         }
     </script>
 </body>
