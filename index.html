@@ -4,24 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Get Location</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <link href="styles.css" rel="stylesheet">
     <style>
         #map-container {
             position: relative;
+            width: 500px; /* adjust as needed */
+            height: 500px; /* adjust as needed */
         }
         #map {
-            max-width: 100%;
-            height: auto;
+            width: 100%;
+            height: 100%;
         }
         #marker {
             position: absolute;
-            width: 20px;
-            height: 20px;
+            width: 10px;
+            height: 10px;
             background-color: red;
             border-radius: 50%;
-            transform: translate(-50%, -50%);
         }
     </style>
 </head>
@@ -29,18 +28,13 @@
     <div class="container">
         <h1>Get Location</h1>
         <p>Tap the button below to get the location</p>
-        <button class="btn btn-primary get-location-btn" onclick="collectAndMatchData()">Get Location</button>
+        <button class="get-location-btn" onclick="collectAndMatchData()">Get Location</button>
         <div id="output"></div>
         <div id="map-container">
-            <img id="map" src="Floor Plan 1000x1000 px.jpg" alt="Map">
+            <img id="map" src="D:\MTP\Prototype\Floor Plan\Floor Plan 1000x1000 px.jpg" alt="Map">
             <div id="marker"></div>
         </div>
     </div>
-
-    <!-- Bootstrap JS and your custom script -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js" integrity="sha384-LqYzpD5C1FgY2r3r+llCB8F4eOMa7iHR0YKtMdrzIqqWPe1j79eAU5zYd9I1B3cl" crossorigin="anonymous"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous"></script>
 
     <script>
         function collectAndMatchData() {
@@ -52,36 +46,21 @@
             fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69')
                 .then(response => response.json())
                 .then(data => {
-                    var closestLatitude;
-                    var closestLongitude;
-                    var minDifference = Infinity;
-
-                    // Iterate through each row in the table
-                    data.forEach(row => {
-                        // Calculate the difference between the collected values and the values in the table
-                        var wlanDifference = Math.abs(wlanStrength - row.wlan_strength);
-                        var cellularDifference = Math.abs(cellularStrength - row.cellular_strength);
-                        // var totalDifference = wlanDifference + cellularDifference;
-                        var euclideanDistance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
-
-                        // Update closest latitude and longitude if a closer match is found
-                        if (euclideanDistance < minDifference) {
-                            minDifference = euclideanDistance;
-                            closestLatitude = row.latitude;
-                            closestLongitude = row.longitude;
-                        }
-                    });
+                    // Perform interpolation
+                    var interpolatedLocation = interpolateLocation(data, wlanStrength, cellularStrength);
 
                     // Output the collected and matched values
                     var output = document.getElementById('output');
-                    output.innerHTML = "<p>Latitude: " + closestLatitude + "</p><p>Longitude: " + closestLongitude + "</p>" +
-                                        "<p>WLAN Strength: " + wlanStrength + "</p><p>Cellular Strength: " + cellularStrength + "</p>";
+                    output.innerHTML = "<p>Latitude: " + interpolatedLocation.latitude.toFixed(6) + "</p>" +
+                                       "<p>Longitude: " + interpolatedLocation.longitude.toFixed(6) + "</p>" +
+                                       "<p>WLAN Strength: " + wlanStrength + "</p>" +
+                                       "<p>Cellular Strength: " + cellularStrength + "</p>";
 
                     // Update the marker position
                     var marker = document.getElementById('marker');
                     var map = document.getElementById('map');
-                    var markerPositionX = closestLongitude * (map.width / 10);
-                    var markerPositionY = map.height - (closestLatitude * (map.height / 10));
+                    var markerPositionX = interpolatedLocation.longitude * (map.width / 10);
+                    var markerPositionY = map.height - (interpolatedLocation.latitude * (map.height / 10));
                     marker.style.left = markerPositionX + 'px';
                     marker.style.top = markerPositionY + 'px';
                 })
@@ -91,14 +70,36 @@
                 });
         }
 
+        function interpolateLocation(data, wlanStrength, cellularStrength) {
+            var totalWeight = 0;
+            var weightedLatSum = 0;
+            var weightedLngSum = 0;
+
+            data.forEach(point => {
+                var wlanDifference = Math.abs(wlanStrength - point.wlan_strength);
+                var cellularDifference = Math.abs(cellularStrength - point.cellular_strength);
+                var distance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
+                var weight = 1 / (distance + 0.0001); // Avoid division by zero
+
+                totalWeight += weight;
+                weightedLatSum += point.latitude * weight;
+                weightedLngSum += point.longitude * weight;
+            });
+
+            return {
+                latitude: weightedLatSum / totalWeight,
+                longitude: weightedLngSum / totalWeight
+            };
+        }
+
         // Function to simulate getting WLAN signal strength
         function getWLANSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
         }
 
         // Function to simulate getting Cellular signal strength
         function getCellularSignalStrength() {
-            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 30
+            return Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
         }
     </script>
 </body>
