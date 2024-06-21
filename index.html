@@ -19,59 +19,69 @@
     </div>
 
     <script>
-        // Define a constant for the number of nearest neighbors to consider
-        const k = 3;
-
         function collectAndMatchData() {
-            // Collect WLAN and Cellular signal strengths
+            // Collect WLAN and Cellular signal strengths, RTT, and Ping
             var wlanStrength = getWLANSignalStrength();
             var cellularStrength = getCellularSignalStrength();
+            var rtt = getrtt();
+            var ping = getping();
 
             // Fetch the pre-stored values from the table
             fetch('https://sheetdb.io/api/v1/w3rcsxtqatd69')
                 .then(response => response.json())
                 .then(data => {
-                    // Create an array to store distances and indices
-                    var distances = [];
-
-                    // Iterate through each row in the table
-                    data.forEach((row, index) => {
-                        // Calculate the Euclidean distance between collected values and the values in the table
+                    // KNN Algorithm
+                    var k = 3; // Number of nearest neighbors to consider
+                    var distances = data.map(row => {
                         var wlanDifference = Math.abs(wlanStrength - row.wlan_strength);
                         var cellularDifference = Math.abs(cellularStrength - row.cellular_strength);
-                        var euclideanDistance = Math.sqrt(Math.pow(wlanDifference, 2) + Math.pow(cellularDifference, 2));
-
-                        // Push the distance and index into the distances array
-                        distances.push({ index: index, distance: euclideanDistance });
+                        var rttDifference = Math.abs(rtt - row.rtt);
+                        var pingDifference = Math.abs(ping - row.ping);
+                        var euclideanDistance = Math.sqrt(
+                            Math.pow(wlanDifference, 2) +
+                            Math.pow(cellularDifference, 2) +
+                            Math.pow(rttDifference, 2) +
+                            Math.pow(pingDifference, 2)
+                        );
+                        return {
+                            distance: euclideanDistance,
+                            latitude: row.latitude,
+                            longitude: row.longitude,
+                            ifcguid: row.ifcguid,
+                            region_name: row.region_name
+                        };
                     });
 
-                    // Sort the distances array by distance in ascending order
+                    // Sort by distance and take the top k neighbors
                     distances.sort((a, b) => a.distance - b.distance);
-
-                    // Get the k nearest neighbors
                     var nearestNeighbors = distances.slice(0, k);
 
-                    // Calculate the average of latitude and longitude of k nearest neighbors
-                    var avgLatitude = 0;
-                    var avgLongitude = 0;
-                    nearestNeighbors.forEach(neighbor => {
-                        avgLatitude += parseFloat(data[neighbor.index].latitude);
-                        avgLongitude += parseFloat(data[neighbor.index].longitude);
-                    });
-                    avgLatitude /= k;
-                    avgLongitude /= k;
+                    // Compute the average latitude and longitude of the nearest neighbors
+                    var averageLatitude = nearestNeighbors.reduce((sum, neighbor) => sum + parseFloat(neighbor.latitude), 0) / k;
+                    var averageLongitude = nearestNeighbors.reduce((sum, neighbor) => sum + parseFloat(neighbor.longitude), 0) / k;
+
+                    // Get the integer parts of the average latitude and longitude
+                    var integerLatitude = Math.floor(averageLatitude);
+                    var integerLongitude = Math.floor(averageLongitude);
+
+                    // Find the corresponding IFCGUID and region name for the integer latitude and longitude
+                    var matchingRow = data.find(row => Math.floor(row.latitude) === integerLatitude && Math.floor(row.longitude) === integerLongitude);
+                    var ifcguid = matchingRow ? matchingRow.ifcguid : 'Not found';
+                    var region_name = matchingRow ? matchingRow.region_name : 'Not found';
 
                     // Output the collected and matched values
                     var output = document.getElementById('output');
-                    output.innerHTML = "<p>Latitude: " + avgLatitude.toFixed(6) + "</p><p>Longitude: " + avgLongitude.toFixed(6) + "</p>" +
-                                        "<p>WLAN Strength: " + wlanStrength + "</p><p>Cellular Strength: " + cellularStrength + "</p>";
+                    output.innerHTML = "<p>Latitude: " + averageLatitude.toFixed(6) + "</p><p>Longitude: " + averageLongitude.toFixed(6) + "</p>" +
+                                       "<p>WLAN Strength: " + wlanStrength + "</p><p>Cellular Strength: " + cellularStrength + "</p>" +
+                                       "<p>RTT: " + rtt + "</p><p>Ping: " + ping + "</p>" +
+                                       "<p>IFC GUID: " + ifcguid + "</p><p>Region Name: " + region_name + "</p>";
 
                     // Update the marker position
                     var marker = document.getElementById('marker');
                     var map = document.getElementById('map');
-                    var markerPositionX = avgLongitude * (map.width / 10);
-                    var markerPositionY = map.height - (avgLatitude * (map.height / 10));
-                    marker.style.left = markerPositionX + 'px';
+                    var markerPositionX = averageLongitude * (map.width / 10);
+                    var markerPositionY = map.height - (averageLatitude * (map.height / 10));
+                    marker.style.left = markerPositionX + 50 + 'px';
                     marker.style.top = markerPositionY + 'px';
                 })
                 .catch(error => {
@@ -82,31 +92,25 @@
 
         // Function to simulate getting WLAN signal strength
         function getWLANSignalStrength() {
-            if (navigator.connection) {
-                // Assuming WLAN if connection type is 'wifi'
-                if (navigator.connection.type === 'wifi') {
-                    // There's no direct way to get signal strength, but downlink speed can be a proxy
-                    return navigator.connection.downlink || 'Unknown';
-                } else {
-                    return 'Not connected to WiFi';
-                }
-            } else {
-                return 'Navigator connection API not supported';
-            }
+            return Math.floor(Math.random() * (-50 - (-110) + 1)) - 110; // Random number between -50 and -110
         }
 
         // Function to simulate getting Cellular signal strength
         function getCellularSignalStrength() {
-                // Assuming cellular if connection type is 'cellular'
-                if (navigator.connection.type === 'cellular') {
-                    // There's no direct way to get signal strength, but downlink speed can be a proxy
-                    return navigator.connection.downlink || 'Unknown';
-                } else {
-                    return 'Not connected to Cellular';
-                }
-            } else {
-                return 'Navigator connection API not supported';
-            }
+            return Math.floor(Math.random() * (-50 - (-110) + 1)) - 110; // Random number between -50 and -110
+        }
+
+        // Function to simulate getting RTT
+        function getrtt() {
+            // Generate a random number between 0.01 and 1.00
+            return (Math.random() * (1.00 - 0.01) + 0.01).toFixed(2);
+        }
+
+        // Function to simulate getting Ping
+        function getping() {
+            // Generate a random number between 0.01 and 1.00
+            return (Math.random() * (1.00 - 0.01) + 0.01).toFixed(2);
+        }
     </script>
 </body>
 </html>
